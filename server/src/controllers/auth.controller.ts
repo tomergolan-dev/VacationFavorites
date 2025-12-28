@@ -1,5 +1,11 @@
+// src/controllers/auth.controller.ts
 import { Request, Response } from "express";
-import { registerUser, verifyEmail, loginUser } from "../services/auth.service";
+import {
+    registerUser,
+    verifyEmail,
+    loginUser,
+    resendVerificationEmail,
+} from "../services/auth.service";
 
 export async function registerController(req: Request, res: Response) {
     try {
@@ -22,12 +28,26 @@ export async function verifyEmailController(req: Request, res: Response) {
     }
 }
 
+export async function resendVerificationController(req: Request, res: Response) {
+    try {
+        const email = String(req.body?.email || "");
+        if (!email) return res.status(400).json({ ok: false, message: "Missing email" });
+
+        const result = await resendVerificationEmail(email);
+        return res.json(result);
+    } catch (e: any) {
+        return res.status(400).json({ ok: false, message: e?.message || "Resend failed" });
+    }
+}
+
 export async function loginController(req: Request, res: Response) {
     try {
         const { email, password } = req.body;
         const result = await loginUser(email, password);
         return res.json(result);
     } catch (e: any) {
-        return res.status(401).json({ ok: false, message: e?.message || "Login failed" });
+        const code = e?.code;
+        const message = e?.message || "Login failed";
+        return res.status(401).json({ ok: false, message, code });
     }
 }

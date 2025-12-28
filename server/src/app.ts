@@ -1,13 +1,8 @@
-// Import core libraries
+import dotenv from "dotenv";
+dotenv.config(); // Load environment variables from .env into process.env
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-
-// Import the main API router
-import router from "./routes";
-
-// Load environment variables from .env into process.env
-dotenv.config();
+import router from "./routes"; // Import the main API router
 
 // Create the Express application (does NOT start the server)
 const app = express();
