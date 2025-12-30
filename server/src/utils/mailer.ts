@@ -1,18 +1,37 @@
-import nodemailer from "nodemailer";
+// utils/mailer.ts
+import sgMail from "@sendgrid/mail";
+
+type EmailArgs = {
+    to: string;
+    subject: string;
+    html: string;
+};
+
+function getEmailFrom(): string {
+    const from = process.env.EMAIL_FROM;
+    if (!from) throw new Error("Missing EMAIL_FROM in environment variables");
+    return from;
+}
+
+function ensureSendgridConfigured() {
+    const apiKey = process.env.SENDGRID_API_KEY;
+    if (!apiKey) throw new Error("Missing SENDGRID_API_KEY in environment variables");
+    sgMail.setApiKey(apiKey);
+}
 
 export async function sendEmail(to: string, subject: string, html: string) {
-    const host = process.env.SMTP_HOST!;
-    const port = Number(process.env.SMTP_PORT || 587);
-    const user = process.env.SMTP_USER!;
-    const pass = process.env.SMTP_PASS!;
-    const from = process.env.EMAIL_FROM || user;
+    const provider = (process.env.EMAIL_PROVIDER || "sendgrid").toLowerCase();
 
-    const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: false, // 587 = STARTTLS
-        auth: { user, pass },
+    if (provider !== "sendgrid") {
+        throw new Error(`Unsupported EMAIL_PROVIDER "${provider}". Use "sendgrid".`);
+    }
+
+    ensureSendgridConfigured();
+
+    await sgMail.send({
+        to,
+        from: getEmailFrom(),
+        subject,
+        html,
     });
-
-    await transporter.sendMail({ from, to, subject, html });
 }

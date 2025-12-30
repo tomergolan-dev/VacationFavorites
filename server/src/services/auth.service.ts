@@ -41,6 +41,39 @@ async function sendVerificationEmail(email: string, token: string) {
     );
 }
 
+function isResetTokenValid(user: any) {
+    return (
+        !!user.resetPasswordToken &&
+        !!user.resetPasswordTokenExpires &&
+        user.resetPasswordTokenExpires.getTime() > Date.now()
+    );
+}
+
+function newResetPasswordToken() {
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expires = new Date(Date.now() + 1000 * 60 * 30); // 30 minutes
+    return { rawToken, tokenHash, expires };
+}
+
+async function sendResetPasswordEmail(email: string, rawToken: string) {
+    const appUrl = process.env.APP_URL || "http://localhost:5173";
+    const resetLink = `${appUrl}/reset-password?token=${rawToken}`;
+
+    await sendEmail(
+        email,
+        "Reset your password - VacationFavorites",
+        `
+    <div style="font-family: Arial; line-height:1.6">
+      <h2>Password reset 🔐</h2>
+      <p>Click the link below to reset your password (valid for 30 minutes):</p>
+      <p><a href="${resetLink}">${resetLink}</a></p>
+      <p>If you didn’t request this, you can ignore this email.</p>
+    </div>
+    `
+    );
+}
+
 /**
  * REGISTER FLOW
  * - New email: create user + send verification email.
@@ -213,3 +246,63 @@ export async function loginUser(emailRaw: string, password: string) {
         },
     };
 }
+
+export async function requestPasswordReset(emailRaw: string) {
+    const email = normalizeEmail(emailRaw);
+    const user = await User.findOne({ email });
+
+    // חשוב: לא לחשוף האם משתמש קיים (מניעת enumeration)
+    if (!user) {
+        return { ok: true, message: "If the email exists, a reset link has been sent." };
+    }
+
+    // אופציונלי: אפשר לדרוש אימות מייל לפני reset
+    // אם אתה רוצה: אם לא מאומת -> אל תשלח (אבל עדיין תחזיר ok:true)
+    if (!user.emailVerified) {
+        return { ok: true, message: "If the email exists, a reset link has been sent." };
+    }
+
+    // אם כבר יש טוקן תקף, לא שולחים שוב
+    if (isResetTokenValid(user)) {
+        return {
+            ok: true,
+            message: "Reset link already sent. Please check your inbox/spam.",
+            code: "RESET_ALREADY_SENT",
+        };
+    }
+
+    const { rawToken, tokenHash, expires } = newResetPasswordToken();
+    user.resetPasswordToken = tokenHash as any;
+    user.resetPasswordTokenExpires = expires as any;
+    await user.save();
+
+    await sendResetPasswordEmail(user.email, rawToken);
+
+    return { ok: true, message: "If the email exists, a reset link has been sent. Please check your inbox/spam." };
+}
+
+export async function resetPassword(tokenRaw: string, newPassword: string) {
+    const tokenHash = crypto.createHash("sha256").update(tokenRaw).digest("hex");
+
+    const user = await User.findOne({ resetPasswordToken: tokenHash });
+    if (!user) throw new Error("Invalid or expired reset token");
+
+    if (!user.resetPasswordTokenExpires || user.resetPasswordTokenExpires.getTime() < Date.now()) {
+        user.resetPasswordToken = null;
+        user.resetPasswordTokenExpires = null;
+        await user.save();
+        throw new Error("Invalid or expired reset token");
+    }
+
+    const isSame = await comparePassword(newPassword, user.passwordHash);
+    if (isSame) {
+        throw new Error("New password must be different from your current password");
+    }
+    user.passwordHash = await hashPassword(newPassword);
+    user.resetPasswordToken = null;
+    user.resetPasswordTokenExpires = null;
+    await user.save();
+
+    return { ok: true, message: "Password updated successfully" };
+}
+

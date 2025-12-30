@@ -5,7 +5,10 @@ import {
     verifyEmail,
     loginUser,
     resendVerificationEmail,
+    requestPasswordReset,
+    resetPassword
 } from "../services/auth.service";
+
 
 export async function registerController(req: Request, res: Response) {
     try {
@@ -51,3 +54,25 @@ export async function loginController(req: Request, res: Response) {
         return res.status(401).json({ ok: false, message, code });
     }
 }
+
+export async function forgotPasswordController(req: Request, res: Response) {
+    try {
+        const email = String(req.body?.email || "");
+        const result = await requestPasswordReset(email);
+        return res.json(result);
+    } catch (e: any) {
+        return res.status(400).json({ ok: false, message: e?.message || "Forgot password failed" });
+    }
+}
+
+export async function resetPasswordController(req: Request, res: Response) {
+    try {
+        const token = String(req.body?.token || "");
+        const password = String(req.body?.password || "");
+        const result = await resetPassword(token, password);
+        return res.json(result);
+    } catch (e: any) {
+        return res.status(400).json({ ok: false, message: e?.message || "Reset password failed" });
+    }
+}
+

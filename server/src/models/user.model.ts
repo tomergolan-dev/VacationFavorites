@@ -14,6 +14,9 @@ const userSchema = new Schema(
         emailVerified: { type: Boolean, default: false },
         verificationToken: { type: String, default: null },
         verificationTokenExpires: { type: Date, default: null },
+
+        resetPasswordToken: { type: String, default: null },
+        resetPasswordTokenExpires: { type: Date, default: null },
     },
     { timestamps: true }
 );
@@ -26,6 +29,8 @@ userSchema.set("toJSON", {
     virtuals: true,
     transform: (_: any, ret: any) => {
         delete ret.passwordHash;
+        delete ret.resetPasswordToken;
+        delete ret.resetPasswordTokenExpires;
         delete ret.__v;
         delete ret.id;
         return ret;
